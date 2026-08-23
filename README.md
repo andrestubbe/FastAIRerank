@@ -14,6 +14,10 @@
 
 [![FastAIRerank Showcase](docs/screenshot.png)](docs/screenshot.png)
 
+<p align="center">
+  <img src="docs/reranker_pipeline.png" alt="FastAIRerank Reranking Pipeline" width="850">
+</p>
+
 ---
 
 ## Quick Start
