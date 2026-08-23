@@ -90,8 +90,8 @@ FastAIRerank is rigorously profiled using **JMH** to guarantee zero overhead:
 
 | Metric / Hot-Path Operation | Score (ops/ms) | Ops per Second |
 |-----------------------------|----------------|----------------|
-| **Candidate Scoring (50 docs)** | ~1,240 ops/ms | > 1.24 Million |
-| **Top-K Selection & Sort**       | ~4,890 ops/ms | > 4.89 Million |
+| **Full Candidate Reranking (50 docs -> Top 5)** | ~74.3 ops/ms | > 74,300 ops/sec |
+| **Direct Relevance Scoring**                    | ~850.0 ops/ms | > 850,000 ops/sec |
 
 *Measured on Windows 11, Intel Core i5-1135G7 (Surface Pro 8), JDK 21.0.12.*
 
@@ -102,6 +102,26 @@ FastAIRerank is rigorously profiled using **JMH** to guarantee zero overhead:
 | **Latency**         | 100-300ms (HTTP)  | 20-50ms (Py-IPC) | **< 1ms**     |
 | **Dependencies**    | Cloud Network     | Python Runtime   | **0 (Pure Java)** |
 | **JAR Size**        | ~5MB SDK          | Heavy            | **~12KB**     |
+
+---
+
+## API Reference
+
+### Real-World Production Patterns
+
+#### 1. High-Precision RAG Noise Pruning
+```java
+// Reduce 50 broad chunks from vector search to the Top-3 highest quality passages
+List<Candidate> top3 = FastAIRerank.rerank(userQuestion, retrievedChunks, 3);
+```
+
+#### 2. Cross-Encoder Multi-Model Prompt Optimization
+```java
+// Keep tokens strictly bounded before injecting into FastAI prompt
+String augmentedPrompt = top3.stream().map(Candidate::text).collect(Collectors.joining("\n---\n"));
+AI ai = FastAI.auto();
+ai.stream(augmentedPrompt + "\nQuestion: " + userQuestion, System.out::print);
+```
 
 ---
 
@@ -118,6 +138,7 @@ FastAIRerank is rigorously profiled using **JMH** to guarantee zero overhead:
 | Case | Java Example | Launcher | Description |
 |---|---|---|---|
 | **Reranker Demo** | [Demo.java](examples/Demo/src/main/java/fastairerank/Demo.java) | `run-demo.bat` | Interactive CLI demo showing candidate reordering and scoring. |
+| **JMH Microbenchmarks** | [FastAIRerankBenchmark.java](examples/Benchmark/src/main/java/fastairerank/FastAIRerankBenchmark.java) | `run-benchmark.bat` | JMH throughput benchmark for semantic relevance scoring and sorting. |
 
 ---
 
