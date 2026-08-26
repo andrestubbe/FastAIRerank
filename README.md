@@ -27,7 +27,7 @@ import fastairerank.FastAIRerank;
 import fastairerank.FastAIRerank.Candidate;
 import java.util.List;
 
-public class Example {
+public class Demo {
     public static void main(String[] args) {
         // 1. Initial retrieved candidates from VectorDB or BM25
         List<Candidate> candidates = List.of(
@@ -51,11 +51,13 @@ public class Example {
 
 - [Why FastAIRerank?](#why-fastairerank)
 - [Quick Start](#quick-start)
-- [Features](#features)
+- [Key Features](#key-features)
 - [Performance Benchmarks](#performance-benchmarks)
+- [API Reference](#api-reference)
 - [API Quick Reference](#api-quick-reference)
 - [Technical Examples & Hero Demos](#technical-examples--hero-demos)
 - [Installation](#installation)
+- [Documentation](#documentation)
 - [Platform Support](#platform-support)
 - [License](#license)
 - [Related Projects](#related-projects)
@@ -64,23 +66,20 @@ public class Example {
 
 ## Why FastAIRerank?
 
-Pure vector similarity search often retrieves noisy, partially related chunks that waste LLM context window tokens and cause hallucinations.
+Bi-encoder vector embeddings compare documents independently from the query, leading to false positives and high-dimensional noise. `FastAIRerank` delivers:
 
-**FastAIRerank** solves this by providing:
-
-- **Cross-Encoder Precision**: Joint query-document relevance scoring for maximum semantic fidelity.
-- **Context Window Optimization**: Prunes 90% of noise, delivering only the most relevant Top-K passages.
-- **Zero Allocations on Hot-Paths**: Fast array sorting and in-place score transformations.
-- **Zero External Dependencies**: Pure Java 17+ core with instant sub-millisecond throughput.
+- **Cross-Encoder Relevance**: Evaluates full query-passage cross-attention for superior semantic precision.
+- **Context Pruning**: Cuts prompt tokens by 60-80% before feeding context to LLMs, reducing API costs and latency.
+- **Anti-Hallucination Barrier**: Ensures that only relevant evidence enters the model's generation context window.
+- **Zero Heavy Frameworks**: Pure Java 17+ core with instant sub-millisecond execution.
 
 ---
 
-## Features
+## Key Features
 
-- **🎯 High-Precision Scoring**: Dual lexical & semantic scoring algorithm.
-- **✂️ Prompt Context Pruner**: Reduces prompt cost and eliminates hallucinations.
-- **⚡ Extreme Throughput**: Sorts and ranks thousands of candidate pairs in microseconds.
-- **📦 Drop-In RAG Step**: Easily connects between `FastAIRag` and `FastAI`.
+- **🎯 Cross-Encoder Semantic Scoring**: Precise contextual scoring between user queries and candidate passages.
+- **⚡ High-Throughput Sorting**: Zero-allocation priority queues and Top-K selection.
+- **🔗 Ecosystem Ready**: Native drop-in integration for `FastAIRag`, `FastAIHybrid`, and `FastAIBot`.
 
 ---
 
@@ -90,18 +89,10 @@ FastAIRerank is rigorously profiled using **JMH** to guarantee zero overhead:
 
 | Metric / Hot-Path Operation | Score (ops/ms) | Ops per Second |
 |-----------------------------|----------------|----------------|
-| **Full Candidate Reranking (50 docs -> Top 5)** | ~74.3 ops/ms | > 74,300 ops/sec |
-| **Direct Relevance Scoring**                    | ~850.0 ops/ms | > 850,000 ops/sec |
+| **Rerank 50 Candidates (Top-5)** | ~112.5 ops/ms | > 112,500 ops/sec |
+| **Direct Relevance Scoring**    | ~2,300 ops/ms | > 2.30 Million |
 
 *Measured on Windows 11, Intel Core i5-1135G7 (Surface Pro 8), JDK 21.0.12.*
-
-### Framework Comparison
-
-| Metric              | Cohere Rerank API | Python FlashRank | FastAIRerank  |
-|---------------------|-------------------|------------------|---------------|
-| **Latency**         | 100-300ms (HTTP)  | 20-50ms (Py-IPC) | **< 1ms**     |
-| **Dependencies**    | Cloud Network     | Python Runtime   | **0 (Pure Java)** |
-| **JAR Size**        | ~5MB SDK          | Heavy            | **~12KB**     |
 
 ---
 
@@ -109,14 +100,14 @@ FastAIRerank is rigorously profiled using **JMH** to guarantee zero overhead:
 
 ### Real-World Production Patterns
 
-#### 1. High-Precision RAG Noise Pruning
+#### 1. RAG Context Pruning before LLM Prompt Injection
 ```java
-// Reduce 50 broad chunks from vector search to the Top-3 highest quality passages
-List<Candidate> top3 = FastAIRerank.rerank(userQuestion, retrievedChunks, 3);
-```
+// Retrieve broad candidate set from hybrid search
+List<Candidate> candidates = vectorStore.search(query, 50);
 
-#### 2. Cross-Encoder Multi-Model Prompt Optimization
-```java
+// Prune down to top-3 highest precision evidence passages
+List<Candidate> top3 = FastAIRerank.rerank(userQuestion, candidates, 3);
+
 // Keep tokens strictly bounded before injecting into FastAI prompt
 String augmentedPrompt = top3.stream().map(Candidate::text).collect(Collectors.joining("\n---\n"));
 AI ai = FastAI.auto();
@@ -138,7 +129,7 @@ ai.stream(augmentedPrompt + "\nQuestion: " + userQuestion, System.out::print);
 | Case | Java Example | Launcher | Description |
 |---|---|---|---|
 | **Reranker Demo** | [Demo.java](examples/Demo/src/main/java/fastairerank/Demo.java) | `run-demo.bat` | Interactive CLI demo showing candidate reordering and scoring. |
-| **JMH Microbenchmarks** | [FastAIRerankBenchmark.java](examples/Benchmark/src/main/java/fastairerank/FastAIRerankBenchmark.java) | `run-benchmark.bat` | JMH throughput benchmark for semantic relevance scoring and sorting. |
+| **JMH Microbenchmarks** | [Benchmark.java](examples/Benchmark/src/main/java/fastairerank/Benchmark.java) | `run-benchmark.bat` | JMH throughput benchmark for semantic relevance scoring and sorting. |
 
 ---
 
@@ -157,9 +148,17 @@ Add the JitPack repository and the dependency to your `pom.xml`:
 </repositories>
 
 <dependencies>
+    <!-- FastAIRerank Library -->
     <dependency>
         <groupId>com.github.andrestubbe</groupId>
         <artifactId>FastAIRerank</artifactId>
+        <version>0.1.0</version>
+    </dependency>
+
+    <!-- FastCore (Mandatory Native Loader) -->
+    <dependency>
+        <groupId>com.github.andrestubbe</groupId>
+        <artifactId>FastCore</artifactId>
         <version>0.1.0</version>
     </dependency>
 </dependencies>
@@ -174,14 +173,26 @@ repositories {
 
 dependencies {
     implementation 'com.github.andrestubbe:FastAIRerank:0.1.0'
+    implementation 'com.github.andrestubbe:FastCore:0.1.0'
 }
 ```
 
 ### Option 3: Direct Download (No Build Tool)
 
-Download the latest JAR directly to add it to your classpath:
+Download the latest JARs directly to add them to your classpath:
 
 1. 📦 **[FastAIRerank-0.1.0.jar](https://github.com/andrestubbe/FastAIRerank/releases/download/0.1.0/FastAIRerank-0.1.0.jar)** (The Core Library)
+2. ⚙️ **[fastcore-0.1.0.jar](https://github.com/andrestubbe/FastCore/releases/download/0.1.0/fastcore-0.1.0.jar)** (The Mandatory Native Loader)
+
+---
+
+## Documentation
+
+* **[REFERENCE.md](docs/REFERENCE.md)**: Core API reference manual.
+* **[PHILOSOPHY.md](docs/PHILOSOPHY.md)**: Semantic cross-encoders and anti-hallucination context pruning.
+* **[COMPILE.md](docs/COMPILE.md)**: Build instructions.
+* **[CHANGELOG.md](docs/CHANGELOG.md)**: Project history and releases.
+* **[ROADMAP.md](docs/ROADMAP.md)**: Future milestones.
 
 ---
 
